@@ -41,7 +41,7 @@ type Cubbyhole struct {
 // *AppVaulter vault client.
 func (v *Cubbyhole) ChildToken() (string, error) {
 	opts := &vault.TokenCreateRequest{
-		NumUses: 2,
+		NumUses: 2, // one use is for writing to the cubbyhole
 	}
 	ta := v.client.Auth().Token()
 	secret, err := ta.Create(opts)
@@ -227,4 +227,10 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println(read)
+
+	if _, err = cubby.ReadFromCubbyhole(secret); err == nil {
+		log.Fatal(errors.New("err was nil"))
+	} else {
+		fmt.Printf("correctly received the following error: %s\n", err)
+	}
 }
