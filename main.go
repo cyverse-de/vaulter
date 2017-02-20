@@ -9,8 +9,8 @@ import (
 	vault "github.com/hashicorp/vault/api"
 )
 
-// AppConfig contains the applications configuration settings.
-type AppConfig struct {
+// CubbyholeConfig contains the applications configuration settings.
+type CubbyholeConfig struct {
 	ParentToken     string // Other tokens will be children of this token.
 	VaultHost       string // The hostname or ip address of the vault server.
 	VaultPort       string // The port of the vault server.
@@ -20,9 +20,9 @@ type AppConfig struct {
 	VaultClientKey  string // The paht to the client key used for Vault communication.
 }
 
-// Vaulter defines interactions with a Vault server. Mostly useful for stubbing
+// Cubbyholer defines interactions with a Vault server. Mostly useful for stubbing
 // stuff out for unit tests.
-type Vaulter interface {
+type Cubbyholer interface {
 	ChildToken() (*vault.Secret, error)
 	NewClient(token string) (*vault.Client, error)
 	MountCubbyhole() error
@@ -31,15 +31,15 @@ type Vaulter interface {
 	ReadFromCubbyhole(token string) (*vault.Secret, error)
 }
 
-// AppVaulter is a Vaulter that actually interacts with a Vault server.
-type AppVaulter struct {
+// Cubbyhole is a Vaulter that actually interacts with a Vault server.
+type Cubbyhole struct {
 	client *vault.Client
-	cfg    *AppConfig
+	cfg    *CubbyholeConfig
 }
 
 // ChildToken generates a new token that's a child of the one configured for the
 // *AppVaulter vault client.
-func (v *AppVaulter) ChildToken() (string, error) {
+func (v *Cubbyhole) ChildToken() (string, error) {
 	opts := &vault.TokenCreateRequest{
 		NumUses: 2,
 	}
@@ -58,7 +58,7 @@ func (v *AppVaulter) ChildToken() (string, error) {
 }
 
 // MountCubbyhole mounts the provided path in Vault.
-func (v *AppVaulter) MountCubbyhole() error {
+func (v *Cubbyhole) MountCubbyhole() error {
 	mci := vault.MountConfigInput{}
 	mi := &vault.MountInput{
 		Type:        "cubbyhole",
@@ -70,7 +70,7 @@ func (v *AppVaulter) MountCubbyhole() error {
 }
 
 // IsCubbyholeMounted returns true if the cubbyhole backend is mounted.
-func (v *AppVaulter) IsCubbyholeMounted() (bool, error) {
+func (v *Cubbyhole) IsCubbyholeMounted() (bool, error) {
 	var (
 		hasPath       bool
 		cubbyholePath = "cubbyhole/"
@@ -92,7 +92,7 @@ func (v *AppVaulter) IsCubbyholeMounted() (bool, error) {
 // NewClient returns a new *vault.Client instance configured to use the
 // vault token passed in as a parameter. Can be used on initial setup with the
 // root token and also with child tokens elsewhere in the code.
-func (v *AppVaulter) NewClient(token string) (*vault.Client, error) {
+func (v *Cubbyhole) NewClient(token string) (*vault.Client, error) {
 	var err error
 	tlsconfig := &vault.TLSConfig{
 		CACert:     v.cfg.VaultCACert,
@@ -119,7 +119,7 @@ func (v *AppVaulter) NewClient(token string) (*vault.Client, error) {
 
 // WriteToCubbyhole writes a string to a path in the cubbyhole backend. That
 // path is tied to the token that is passed in.
-func (v *AppVaulter) WriteToCubbyhole(token, content string) error {
+func (v *Cubbyhole) WriteToCubbyhole(token, content string) error {
 	var (
 		client *vault.Client
 		err    error
@@ -141,7 +141,7 @@ func (v *AppVaulter) WriteToCubbyhole(token, content string) error {
 
 // ReadFromCubbyhole reads and returns the secret from the path
 // cubbyhole/<token> on the Vault server.
-func (v *AppVaulter) ReadFromCubbyhole(token string) (string, error) {
+func (v *Cubbyhole) ReadFromCubbyhole(token string) (string, error) {
 	var (
 		client *vault.Client
 		err    error
@@ -180,7 +180,7 @@ func main() {
 	)
 	flag.Parse()
 
-	ac := &AppConfig{
+	cc := &CubbyholeConfig{
 		ParentToken:     *parent,
 		VaultHost:       *host,
 		VaultPort:       *port,
@@ -189,15 +189,15 @@ func main() {
 		VaultClientCert: *clientcert,
 		VaultClientKey:  *clientkey,
 	}
-	av := &AppVaulter{
-		cfg: ac,
+	cubby := &Cubbyhole{
+		cfg: cc,
 	}
-	av.client, err = av.NewClient(av.cfg.ParentToken)
+	cubby.client, err = cubby.NewClient(cubby.cfg.ParentToken)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%#v\n", av)
-	sys := av.client.Sys()
+	fmt.Printf("%#v\n", cubby)
+	sys := cubby.client.Sys()
 	mounts, err := sys.ListMounts()
 	if err != nil {
 		log.Fatal(err)
@@ -205,25 +205,25 @@ func main() {
 	for k := range mounts {
 		fmt.Println(k)
 	}
-	secret, err := av.ChildToken()
+	secret, err := cubby.ChildToken()
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(secret)
-	hasMount, err := av.IsCubbyholeMounted()
+	hasMount, err := cubby.IsCubbyholeMounted()
 	if err != nil {
 		log.Fatal(err)
 	}
 	if !hasMount {
-		if err = av.MountCubbyhole(); err != nil {
+		if err = cubby.MountCubbyhole(); err != nil {
 			log.Fatal(err)
 		}
 	}
-	if err = av.WriteToCubbyhole(secret, "foo"); err != nil {
+	if err = cubby.WriteToCubbyhole(secret, "foo"); err != nil {
 		log.Fatal(err)
 	}
 	var read string
-	if read, err = av.ReadFromCubbyhole(secret); err != nil {
+	if read, err = cubby.ReadFromCubbyhole(secret); err != nil {
 		log.Fatal(err)
 	}
 	log.Println(read)
