@@ -1,4 +1,4 @@
-package cubbyhole
+package vaulter
 
 import (
 	"errors"
@@ -23,6 +23,18 @@ type Mounter interface {
 // MountLister is an interface for objects that can list mounted Vault backends.
 type MountLister interface {
 	ListMounts() (map[string]*vault.MountOutput, error)
+}
+
+// MountConfigGetter is an interface for objects that can get the configuration
+// for a mount in Vault.
+type MountConfigGetter interface {
+	MountConfig(path string) (*vault.MountConfigOutput, error)
+}
+
+// MountTuner is an interface for objects that need to configure a mount in
+// Vault.
+type MountTuner interface {
+	TuneMount(path string, input vault.MountConfigInput) error
 }
 
 // ConfigGetter is an interface for objects that need access to the
@@ -93,6 +105,7 @@ type CubbyholeReader interface {
 type Vaulter interface {
 	Tokener
 	Mounter
+	MountConfigGetter
 	MountLister
 	Configurer
 	ConfigGetter
@@ -125,6 +138,20 @@ func (v *VaultAPI) CreateToken(ta *vault.TokenAuth, opts *vault.TokenCreateReque
 func (v *VaultAPI) Mount(path string, mi *vault.MountInput) error {
 	sys := v.client.Sys()
 	return sys.Mount(path, mi)
+}
+
+// MountConfig uses the VaultAPI to get the config for the passed in mount
+// point.
+func (v *VaultAPI) MountConfig(path string) (*vault.MountConfigOutput, error) {
+	sys := v.client.Sys()
+	return sys.MountConfig(path)
+}
+
+// TuneMount uses the VaultAPI to set the config for the passed in mount
+// point.
+func (v *VaultAPI) TuneMount(path string, in vault.MountConfigInput) error {
+	sys := v.client.Sys()
+	return sys.TuneMount(path, in)
 }
 
 // ListMounts lists the mounted Vault backends.
@@ -224,23 +251,56 @@ func MountCubbyhole(m Mounter) error {
 	return m.Mount("cubbyhole/", mi)
 }
 
-// IsCubbyholeMounted returns true if the cubbyhole backend is mounted.
-func IsCubbyholeMounted(l MountLister) (bool, error) {
+// MountPKI mounts the provided path in Vault.
+func MountPKI(m Mounter) error {
+	mci := vault.MountConfigInput{}
+	mi := &vault.MountInput{
+		Type:        "pki",
+		Description: "A pki backend for HTCondor jobs",
+		Config:      mci,
+	}
+	return m.Mount("pki/", mi)
+}
+
+// PKIMountConfig returns the mount config for the PKI backend.
+func PKIMountConfig(m MountConfigGetter) (*vault.MountConfigOutput, error) {
+	return m.MountConfig("pki/")
+}
+
+// TunePKI tunes the mounted pki backend.
+func TunePKI(t MountTuner, defaultTTL, maxTTL string) error {
+	in := vault.MountConfigInput{
+		DefaultLeaseTTL: defaultTTL,
+		MaxLeaseTTL:     maxTTL,
+	}
+	return t.TuneMount("pki/", in)
+}
+
+func isBackendMounted(l MountLister, path string) (bool, error) {
 	var (
-		hasPath       bool
-		cubbyholePath = "cubbyhole/"
-		err           error
+		hasPath bool
+		err     error
 	)
 	mounts, err := l.ListMounts()
 	if err != nil {
 		return false, err
 	}
 	for m := range mounts {
-		if m == cubbyholePath {
+		if m == path {
 			hasPath = true
 		}
 	}
 	return hasPath, nil
+}
+
+// IsCubbyholeMounted returns true if the cubbyhole backend is mounted.
+func IsCubbyholeMounted(l MountLister) (bool, error) {
+	return isBackendMounted(l, "cubbyhole/")
+}
+
+// IsPKIMounted returns true if the pki backend is mounted.
+func IsPKIMounted(l MountLister) (bool, error) {
+	return isBackendMounted(l, "pki/")
 }
 
 // WriteToCubbyhole writes a string to a path in the cubbyhole backend. That
