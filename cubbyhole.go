@@ -1,4 +1,4 @@
-package main
+package cubbyhole
 
 import (
 	"errors"
@@ -12,6 +12,7 @@ import (
 // Tokener is an interface for objects that can issue Vault tokens.
 type Tokener interface {
 	Token() *vault.TokenAuth
+	CreateToken(ta *vault.TokenAuth, opts *vault.TokenCreateRequest) (*vault.Secret, error)
 }
 
 // Mounter is an interface for objects that can mount Vault backends.
@@ -115,6 +116,11 @@ func (v *VaultAPI) Token() *vault.TokenAuth {
 	return v.client.Auth().Token()
 }
 
+// CreateToken returns a new child or orphan token.
+func (v *VaultAPI) CreateToken(ta *vault.TokenAuth, opts *vault.TokenCreateRequest) (*vault.Secret, error) {
+	return ta.Create(opts)
+}
+
 // Mount uses the Vault API to mount a backend at a path.
 func (v *VaultAPI) Mount(path string, mi *vault.MountInput) error {
 	sys := v.client.Sys()
@@ -194,7 +200,7 @@ func ChildToken(t Tokener) (string, error) {
 		NumUses: 2, // one use is for writing to the cubbyhole
 	}
 	ta := t.Token()
-	secret, err := ta.Create(opts)
+	secret, err := t.CreateToken(ta, opts)
 	if err != nil {
 		return "", err
 	}
@@ -282,6 +288,9 @@ func ReadFromCubbyhole(cr CubbyholeReader, token string) (string, error) {
 	}
 	if secret.Data == nil {
 		return "", errors.New("data is nil")
+	}
+	if _, ok := secret.Data["irods-config"]; !ok {
+		return "", errors.New("data did not contain irods-config")
 	}
 	if secret.Data["irods-config"] == nil {
 		return "", errors.New("irods-config is nil")
