@@ -1,4 +1,4 @@
-# cfg-server
+# vaulter
 
-A proof-of-concept service that loads an iRODS configuration file into a
-Vault cubbyhole.
+A Go package for interacting with Hashicorp's Vault server from services in the
+CyVerse Discoenvy Environment backend.
