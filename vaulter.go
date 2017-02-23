@@ -3,6 +3,7 @@ package vaulter
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	vault "github.com/hashicorp/vault/api"
@@ -59,6 +60,12 @@ type ClientCreator interface {
 	NewClient(c *vault.Config) (*vault.Client, error)
 }
 
+// ClientGetter is an interface for objects that need access to the Vault
+// client.
+type ClientGetter interface {
+	Client() *vault.Client
+}
+
 // ClientSetter is an interface for objects that need to set their internal
 // client value.
 type ClientSetter interface {
@@ -107,6 +114,13 @@ type PKIChecker interface {
 	MountWriter // this is not a mistake.
 }
 
+// Roller defines an interface for doing role related operations.
+type Roller interface {
+	ClientGetter
+	MountWriter
+	MountReader
+}
+
 // Vaulter defines the lower-level interactions with vault so that they can be
 // stubbed out in unit tests.
 type Vaulter interface {
@@ -119,6 +133,7 @@ type Vaulter interface {
 	ConfigSetter
 	ClientCreator
 	ClientSetter
+	ClientGetter
 	TokenSetter
 	MountWriter
 	MountReader
@@ -187,6 +202,11 @@ func (v *VaultAPI) NewClient(cfg *vault.Config) (*vault.Client, error) {
 // SetClient sets the value of the internal *vault.Client field.
 func (v *VaultAPI) SetClient(c *vault.Client) {
 	v.client = c
+}
+
+// Client gets the currently configured Vault client.
+func (v *VaultAPI) Client() *vault.Client {
+	return v.client
 }
 
 // GetConfig returns the *vault.Config instance used with the underlying client.
@@ -383,6 +403,48 @@ func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
 			return false, nil
 		}
 		return false, err
+	}
+	return true, nil
+}
+
+// CreateRole creates a new role.
+func CreateRole(r Roller, roleName, domains string, subdomains bool) (*vault.Secret, error) {
+	client := r.Client()
+	writePath := fmt.Sprintf("pki/roles/%s", roleName)
+	data := map[string]interface{}{
+		"allowed_domains":  domains,
+		"allow_subdomains": strconv.FormatBool(subdomains),
+	}
+	return r.Write(client, writePath, data)
+}
+
+// HasRole returns true if the passed in role exists and has the same settings.
+func HasRole(r Roller, roleName, domains string, subdomains bool) (bool, error) {
+	client := r.Client()
+	readPath := fmt.Sprintf("pki/roles/%s", roleName)
+	secret, err := r.Read(client, readPath)
+	if err != nil {
+		return false, err
+	}
+	if secret == nil {
+		return false, nil
+	}
+	if secret.Data == nil {
+		return false, nil
+	}
+	v, ok := secret.Data["allowed_domains"]
+	if !ok {
+		return false, nil
+	}
+	if v != domains {
+		return false, nil
+	}
+	v, ok = secret.Data["allow_subdomains"]
+	if !ok {
+		return false, nil
+	}
+	if v != subdomains {
+		return false, nil
 	}
 	return true, nil
 }
