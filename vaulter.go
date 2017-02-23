@@ -2,9 +2,8 @@ package vaulter
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"log"
+	"strings"
 
 	vault "github.com/hashicorp/vault/api"
 )
@@ -75,7 +74,7 @@ type TokenSetter interface {
 // MountWriter is an interface for objects that can write to a path in a Vault
 // backend.
 type MountWriter interface {
-	Write(c *vault.Client, path string, data map[string]interface{}) error
+	Write(c *vault.Client, path string, data map[string]interface{}) (*vault.Secret, error)
 }
 
 // MountReader is an interface for objectst that can read data from a path in a
@@ -98,6 +97,14 @@ type CubbyholeReader interface {
 	ConfigGetter
 	TokenSetter
 	MountReader
+}
+
+// PKIChecker defines the interface for checking to see if root PKI cert is
+// configured.
+type PKIChecker interface {
+	ClientCreator
+	ConfigGetter
+	MountWriter // this is not a mistake.
 }
 
 // Vaulter defines the lower-level interactions with vault so that they can be
@@ -198,10 +205,10 @@ func (v *VaultAPI) SetToken(client *vault.Client, t string) {
 	client.SetToken(t)
 }
 
-func (v *VaultAPI) Write(client *vault.Client, path string, data map[string]interface{}) error {
+func (v *VaultAPI) Write(client *vault.Client, path string, data map[string]interface{}) (*vault.Secret, error) {
 	logical := client.Logical()
-	_, err := logical.Write(path, data)
-	return err
+	secret, err := logical.Write(path, data)
+	return secret, err
 }
 
 func (v *VaultAPI) Read(client *vault.Client, path string) (*vault.Secret, error) {
@@ -318,7 +325,7 @@ func WriteToCubbyhole(cw CubbyholeWriter, token, content string) error {
 	data := map[string]interface{}{
 		"irods-config": content,
 	}
-	err = cw.Write(client, writePath, data)
+	_, err = cw.Write(client, writePath, data)
 	if err != nil {
 		return err
 	}
@@ -332,8 +339,6 @@ func ReadFromCubbyhole(cr CubbyholeReader, token string) (string, error) {
 		client *vault.Client
 		err    error
 	)
-	// Note that we're calling the Cubbyhole version of NewClient(), not the
-	// VaultAPI version.
 	if client, err = cr.NewClient(cr.GetConfig()); err != nil {
 		return "", err
 	}
@@ -356,6 +361,30 @@ func ReadFromCubbyhole(cr CubbyholeReader, token string) (string, error) {
 		return "", errors.New("irods-config is nil")
 	}
 	return secret.Data["irods-config"].(string), nil
+}
+
+// HasRootCert returns true if a cert for the provided role and common-name
+// already exists. The current process is a hack. We attempt to generate a cert,
+// if the attempt succeeds then the root cert exists.
+func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
+	var (
+		client *vault.Client
+		err    error
+	)
+	if client, err = m.NewClient(m.GetConfig()); err != nil {
+		return false, err
+	}
+	writePath := fmt.Sprintf("pki/issue/%s", role)
+	_, err = m.Write(client, writePath, map[string]interface{}{
+		"common_name": commonName,
+	})
+	if err != nil {
+		if strings.HasSuffix(err.Error(), "backend must be configured with a CA certificate/key") {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // InitAPI initializes the provided *VaultAPI. This should be called first.
@@ -384,67 +413,4 @@ func InitAPI(api *VaultAPI, cfg *VaultAPIConfig, token string) error {
 	api.SetClient(client)
 	api.SetConfig(apicfg)
 	return nil
-}
-
-func main() {
-	var (
-		parent     = flag.String("token", "", "The parent Vault token.")
-		host       = flag.String("host", "", "The Vault host to connect to.")
-		port       = flag.String("port", "8200", "The Vault port to connect to.")
-		scheme     = flag.String("scheme", "https", "The protocol scheme to use when connecting to Vault.")
-		cacert     = flag.String("ca-cert", "", "The path to the CA cert for Vault SSL cert validation.")
-		clientcert = flag.String("client-cert", "", "The path to the client cert for Vault connections.")
-		clientkey  = flag.String("client-key", "", "The path to the client key for Vault connections.")
-		err        error
-	)
-	flag.Parse()
-
-	cc := &VaultAPIConfig{
-		ParentToken: *parent,
-		Host:        *host,
-		Port:        *port,
-		Scheme:      *scheme,
-		CACert:      *cacert,
-		ClientCert:  *clientcert,
-		ClientKey:   *clientkey,
-	}
-	vaultAPI := &VaultAPI{}
-	if err = InitAPI(vaultAPI, cc, cc.ParentToken); err != nil {
-		log.Fatal(err)
-	}
-	mounts, err := vaultAPI.ListMounts()
-	if err != nil {
-		log.Fatal(err)
-	}
-	for k := range mounts {
-		fmt.Println(k)
-	}
-	secret, err := ChildToken(vaultAPI)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(secret)
-	hasMount, err := IsCubbyholeMounted(vaultAPI)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if !hasMount {
-		if err = MountCubbyhole(vaultAPI); err != nil {
-			log.Fatal(err)
-		}
-	}
-	if err = WriteToCubbyhole(vaultAPI, secret, "foo"); err != nil {
-		log.Fatal(err)
-	}
-	var read string
-	if read, err = ReadFromCubbyhole(vaultAPI, secret); err != nil {
-		log.Fatal(err)
-	}
-	log.Println(read)
-
-	if _, err = ReadFromCubbyhole(vaultAPI, secret); err == nil {
-		log.Fatal(errors.New("err was nil"))
-	} else {
-		fmt.Printf("correctly received the following error: %s\n", err)
-	}
 }

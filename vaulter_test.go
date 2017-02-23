@@ -225,12 +225,13 @@ func (w *StubCubbyholeWriter) SetToken(client *vault.Client, token string) {
 	w.token = token
 }
 
-func (w *StubCubbyholeWriter) Write(client *vault.Client, token string, data map[string]interface{}) error {
+func (w *StubCubbyholeWriter) Write(client *vault.Client, token string, data map[string]interface{}) (*vault.Secret, error) {
 	w.data = data
+	secret := &vault.Secret{}
 	if w.writeError {
-		return errors.New("write error")
+		return secret, errors.New("write error")
 	}
-	return nil
+	return secret, nil
 }
 
 func TestWriteToCubbyhole(t *testing.T) {
@@ -390,5 +391,81 @@ func TestReadFromCubbyhole(t *testing.T) {
 	}
 	if s != "" {
 		t.Error("secret was not empty after a client creation error")
+	}
+}
+
+type StubPKIChecker struct {
+	cfg           *vault.Config
+	token         string
+	path          string
+	data          map[string]interface{}
+	clientError   bool
+	writeError    bool
+	notFoundError bool
+}
+
+func (w *StubPKIChecker) GetConfig() *vault.Config {
+	return w.cfg
+}
+
+func (w *StubPKIChecker) NewClient(cfg *vault.Config) (*vault.Client, error) {
+	w.cfg = cfg
+	if w.clientError {
+		return nil, errors.New("client error")
+	}
+	return &vault.Client{}, nil
+}
+
+func (w *StubPKIChecker) SetToken(client *vault.Client, token string) {
+	w.token = token
+}
+
+func (w *StubPKIChecker) Write(client *vault.Client, token string, data map[string]interface{}) (*vault.Secret, error) {
+	w.data = data
+	secret := &vault.Secret{}
+	if w.notFoundError {
+		return nil, errors.New("backend must be configured with a CA certificate/key")
+	}
+	if w.writeError {
+		return secret, errors.New("write error")
+	}
+	return secret, nil
+}
+
+func TestHasRootCert(t *testing.T) {
+	cw := &StubPKIChecker{notFoundError: true}
+	hasCert, err := HasRootCert(cw, "example-dot-com", "test.example.com")
+	if err != nil {
+		t.Error(err)
+	}
+	if hasCert {
+		t.Error("cert was found when it should be missing")
+	}
+
+	cw = &StubPKIChecker{writeError: true}
+	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
+	if err == nil {
+		t.Error("err was nil when it should have been set")
+	}
+	if hasCert {
+		t.Error("cert was found when it should be missing")
+	}
+
+	cw = &StubPKIChecker{clientError: true}
+	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
+	if err == nil {
+		t.Error("err was nil when it should have been set")
+	}
+	if hasCert {
+		t.Error("cert was found when it should be missing")
+	}
+
+	cw = &StubPKIChecker{}
+	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
+	if err != nil {
+		t.Error(err)
+	}
+	if !hasCert {
+		t.Error("cert was not found when it should be present")
 	}
 }
