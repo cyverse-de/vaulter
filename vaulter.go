@@ -443,7 +443,8 @@ func HasRole(r Roller, roleName, domains string, subdomains bool) (bool, error) 
 	if !ok {
 		return false, nil
 	}
-	if v != subdomains {
+	fmt.Println(v)
+	if v != strconv.FormatBool(subdomains) {
 		return false, nil
 	}
 	return true, nil
