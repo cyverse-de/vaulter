@@ -498,7 +498,7 @@ func (r *StubRoller) Read(client *vault.Client, path string) (*vault.Secret, err
 	retval := &vault.Secret{
 		Data: map[string]interface{}{
 			"allowed_domains":  "foo.com",
-			"allow_subdomains": "true",
+			"allow_subdomains": true,
 		},
 	}
 	return retval, nil
@@ -532,5 +532,53 @@ func TestHasRole(t *testing.T) {
 	}
 	if !hasRole {
 		t.Error("hasRole was false")
+	}
+}
+
+type StubMountReaderWriter struct {
+	path       string
+	data       map[string]interface{}
+	writeError bool
+	readError  bool
+}
+
+func (r *StubMountReaderWriter) Client() *vault.Client {
+	return &vault.Client{}
+}
+
+func (r *StubMountReaderWriter) Write(client *vault.Client, token string, data map[string]interface{}) (*vault.Secret, error) {
+	r.data = data
+	secret := &vault.Secret{}
+	if r.writeError {
+		return nil, errors.New("write error")
+	}
+	return secret, nil
+}
+
+func (r *StubMountReaderWriter) Read(client *vault.Client, path string) (*vault.Secret, error) {
+	if r.readError {
+		return nil, errors.New("read error")
+	}
+	r.path = path
+	retval := &vault.Secret{
+		Data: map[string]interface{}{
+			"allowed_domains":  "foo.com",
+			"allow_subdomains": "true",
+		},
+	}
+	return retval, nil
+}
+
+func TestGeneratePKICert(t *testing.T) {
+	mrw := &StubMountReaderWriter{}
+	secret, err := GeneratePKICert(mrw, "foo", "foo.com")
+	if err != nil {
+		t.Error(err)
+	}
+	if secret == nil {
+		t.Error("secret is nil")
+	}
+	if mrw.data["common_name"] != "foo.com" {
+		t.Errorf("common_name was '%s' instead of 'foo.com'", mrw.data["common_name"])
 	}
 }

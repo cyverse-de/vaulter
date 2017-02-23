@@ -114,8 +114,8 @@ type PKIChecker interface {
 	MountWriter // this is not a mistake.
 }
 
-// Roller defines an interface for doing role related operations.
-type Roller interface {
+// MountReaderWriter defines an interface for doing role related operations.
+type MountReaderWriter interface {
 	ClientGetter
 	MountWriter
 	MountReader
@@ -408,7 +408,7 @@ func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
 }
 
 // CreateRole creates a new role.
-func CreateRole(r Roller, roleName, domains string, subdomains bool) (*vault.Secret, error) {
+func CreateRole(r MountReaderWriter, roleName, domains string, subdomains bool) (*vault.Secret, error) {
 	client := r.Client()
 	writePath := fmt.Sprintf("pki/roles/%s", roleName)
 	data := map[string]interface{}{
@@ -418,8 +418,18 @@ func CreateRole(r Roller, roleName, domains string, subdomains bool) (*vault.Sec
 	return r.Write(client, writePath, data)
 }
 
+// GeneratePKICert returns a new PKI cert
+func GeneratePKICert(r MountReaderWriter, roleName, commonName string) (*vault.Secret, error) {
+	client := r.Client()
+	writePath := fmt.Sprintf("pki/issue/%s", roleName)
+	data := map[string]interface{}{
+		"common_name": commonName,
+	}
+	return r.Write(client, writePath, data)
+}
+
 // HasRole returns true if the passed in role exists and has the same settings.
-func HasRole(r Roller, roleName, domains string, subdomains bool) (bool, error) {
+func HasRole(r MountReaderWriter, roleName, domains string, subdomains bool) (bool, error) {
 	client := r.Client()
 	readPath := fmt.Sprintf("pki/roles/%s", roleName)
 	secret, err := r.Read(client, readPath)
@@ -443,8 +453,8 @@ func HasRole(r Roller, roleName, domains string, subdomains bool) (bool, error) 
 	if !ok {
 		return false, nil
 	}
-	fmt.Println(v)
-	if v != strconv.FormatBool(subdomains) {
+	if v != subdomains {
+		fmt.Printf("v: %s\tsubdomains: %s\n", v, strconv.FormatBool(subdomains))
 		return false, nil
 	}
 	return true, nil
