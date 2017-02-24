@@ -84,10 +84,15 @@ type MountWriter interface {
 	Write(c *vault.Client, path string, data map[string]interface{}) (*vault.Secret, error)
 }
 
-// MountReader is an interface for objectst that can read data from a path in a
+// MountReader is an interface for objects that can read data from a path in a
 // Vault backend.
 type MountReader interface {
 	Read(c *vault.Client, path string) (*vault.Secret, error)
+}
+
+// Revoker is an interface for objects that can be used to revoke a certificate.
+type Revoker interface {
+	Revoke(c *vault.Client, id string) error
 }
 
 // CubbyholeWriter defines the interface for writing data to a cubbyhole.
@@ -114,6 +119,12 @@ type PKIChecker interface {
 	MountWriter // this is not a mistake.
 }
 
+// PKIRevoker defines an interface for revoking a cert.
+type PKIRevoker interface {
+	ClientGetter
+	Revoker
+}
+
 // MountReaderWriter defines an interface for doing role related operations.
 type MountReaderWriter interface {
 	ClientGetter
@@ -137,6 +148,7 @@ type Vaulter interface {
 	TokenSetter
 	MountWriter
 	MountReader
+	Revoker
 }
 
 // VaultAPI provides an implementation of the Vaulter interface that can
@@ -234,6 +246,11 @@ func (v *VaultAPI) Write(client *vault.Client, path string, data map[string]inte
 func (v *VaultAPI) Read(client *vault.Client, path string) (*vault.Secret, error) {
 	logical := client.Logical()
 	return logical.Read(path)
+}
+
+// Revoke revokes the object represented by the passed-in id.
+func (v *VaultAPI) Revoke(client *vault.Client, id string) error {
+	return client.Sys().Revoke(id)
 }
 
 // VaultAPIConfig contains the applications configuration settings.
@@ -426,6 +443,12 @@ func GeneratePKICert(r MountReaderWriter, roleName, commonName string) (*vault.S
 		"common_name": commonName,
 	}
 	return r.Write(client, writePath, data)
+}
+
+// RevokePKICert revokes a PKI cert
+func RevokePKICert(r PKIRevoker, id string) error {
+	client := r.Client()
+	return r.Revoke(client, id)
 }
 
 // HasRole returns true if the passed in role exists and has the same settings.
