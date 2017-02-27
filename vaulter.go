@@ -15,28 +15,6 @@ type Tokener interface {
 	CreateToken(ta *vault.TokenAuth, opts *vault.TokenCreateRequest) (*vault.Secret, error)
 }
 
-// Mounter is an interface for objects that can mount Vault backends.
-type Mounter interface {
-	Mount(path string, m *vault.MountInput) error
-}
-
-// MountLister is an interface for objects that can list mounted Vault backends.
-type MountLister interface {
-	ListMounts() (map[string]*vault.MountOutput, error)
-}
-
-// MountConfigGetter is an interface for objects that can get the configuration
-// for a mount in Vault.
-type MountConfigGetter interface {
-	MountConfig(path string) (*vault.MountConfigOutput, error)
-}
-
-// MountTuner is an interface for objects that need to configure a mount in
-// Vault.
-type MountTuner interface {
-	TuneMount(path string, input vault.MountConfigInput) error
-}
-
 // ConfigGetter is an interface for objects that need access to the
 // *vault.Config.
 type ConfigGetter interface {
@@ -78,33 +56,23 @@ type TokenSetter interface {
 	SetToken(c *vault.Client, t string)
 }
 
-// MountWriter is an interface for objects that can write to a path in a Vault
-// backend.
-type MountWriter interface {
-	Write(c *vault.Client, path string, data map[string]interface{}) (*vault.Secret, error)
-}
-
-// MountReader is an interface for objects that can read data from a path in a
-// Vault backend.
-type MountReader interface {
-	Read(c *vault.Client, path string) (*vault.Secret, error)
-}
-
 // Revoker is an interface for objects that can be used to revoke a certificate.
 type Revoker interface {
 	Revoke(c *vault.Client, id string) error
 }
 
-// CubbyholeWriter defines the interface for writing data to a cubbyhole.
-type CubbyholeWriter interface {
+// ClientWriter defines the interface for writing data to a mount after
+// creating a new Vault API client.
+type ClientWriter interface {
 	ClientCreator
 	ConfigGetter
 	TokenSetter
 	MountWriter
 }
 
-// CubbyholeReader defines the interface for reading data from a cubbyhole
-type CubbyholeReader interface {
+// ClientReader defines the interface for reading data from a mount after
+// creating a new Vault API client.
+type ClientReader interface {
 	ClientCreator
 	ConfigGetter
 	TokenSetter
@@ -282,122 +250,6 @@ func ChildToken(t Tokener) (string, error) {
 		return "", errors.New("ClientToken was empty")
 	}
 	return secret.Auth.ClientToken, nil
-}
-
-// MountCubbyhole mounts the provided path in Vault.
-func MountCubbyhole(m Mounter) error {
-	mci := vault.MountConfigInput{}
-	mi := &vault.MountInput{
-		Type:        "cubbyhole",
-		Description: "A cubbyhole mount for iRODS configs",
-		Config:      mci,
-	}
-	return m.Mount("cubbyhole/", mi)
-}
-
-// MountPKI mounts the provided path in Vault.
-func MountPKI(m Mounter) error {
-	mci := vault.MountConfigInput{}
-	mi := &vault.MountInput{
-		Type:        "pki",
-		Description: "A pki backend for HTCondor jobs",
-		Config:      mci,
-	}
-	return m.Mount("pki/", mi)
-}
-
-// PKIMountConfig returns the mount config for the PKI backend.
-func PKIMountConfig(m MountConfigGetter) (*vault.MountConfigOutput, error) {
-	return m.MountConfig("pki/")
-}
-
-// TunePKI tunes the mounted pki backend.
-func TunePKI(t MountTuner, defaultTTL, maxTTL string) error {
-	in := vault.MountConfigInput{
-		DefaultLeaseTTL: defaultTTL,
-		MaxLeaseTTL:     maxTTL,
-	}
-	return t.TuneMount("pki/", in)
-}
-
-func isBackendMounted(l MountLister, path string) (bool, error) {
-	var (
-		hasPath bool
-		err     error
-	)
-	mounts, err := l.ListMounts()
-	if err != nil {
-		return false, err
-	}
-	for m := range mounts {
-		if m == path {
-			hasPath = true
-		}
-	}
-	return hasPath, nil
-}
-
-// IsCubbyholeMounted returns true if the cubbyhole backend is mounted.
-func IsCubbyholeMounted(l MountLister) (bool, error) {
-	return isBackendMounted(l, "cubbyhole/")
-}
-
-// IsPKIMounted returns true if the pki backend is mounted.
-func IsPKIMounted(l MountLister) (bool, error) {
-	return isBackendMounted(l, "pki/")
-}
-
-// WriteToCubbyhole writes a string to a path in the cubbyhole backend. That
-// path is tied to the token that is passed in.
-func WriteToCubbyhole(cw CubbyholeWriter, token, content string) error {
-	var (
-		client *vault.Client
-		err    error
-	)
-	if client, err = cw.NewClient(cw.GetConfig()); err != nil {
-		return err
-	}
-	cw.SetToken(client, token)
-	writePath := fmt.Sprintf("cubbyhole/%s", token)
-	data := map[string]interface{}{
-		"irods-config": content,
-	}
-	_, err = cw.Write(client, writePath, data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ReadFromCubbyhole reads and returns the secret from the path
-// cubbyhole/<token> on the Vault server.
-func ReadFromCubbyhole(cr CubbyholeReader, token string) (string, error) {
-	var (
-		client *vault.Client
-		err    error
-	)
-	if client, err = cr.NewClient(cr.GetConfig()); err != nil {
-		return "", err
-	}
-	cr.SetToken(client, token)
-	readPath := fmt.Sprintf("cubbyhole/%s", token)
-	secret, err := cr.Read(client, readPath)
-	if err != nil {
-		return "", err
-	}
-	if secret == nil {
-		return "", errors.New("secret is nil")
-	}
-	if secret.Data == nil {
-		return "", errors.New("data is nil")
-	}
-	if _, ok := secret.Data["irods-config"]; !ok {
-		return "", errors.New("data did not contain irods-config")
-	}
-	if secret.Data["irods-config"] == nil {
-		return "", errors.New("irods-config is nil")
-	}
-	return secret.Data["irods-config"].(string), nil
 }
 
 // HasRootCert returns true if a cert for the provided role and common-name

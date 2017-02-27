@@ -2,6 +2,7 @@ package vaulter
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	vault "github.com/hashicorp/vault/api"
@@ -64,7 +65,10 @@ func (s *StubMounter) Mount(p string, mi *vault.MountInput) error {
 
 func TestMountCubbyhole(t *testing.T) {
 	sm := &StubMounter{}
-	err := MountCubbyhole(sm)
+	err := Mount(sm, "cubbyhole/", &MountConfiguration{
+		Type:        "cubbyhole",
+		Description: "A cubbyhole mount for iRODS configs",
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -78,7 +82,10 @@ func TestMountCubbyhole(t *testing.T) {
 
 func TestMountPKI(t *testing.T) {
 	sm := &StubMounter{}
-	err := MountPKI(sm)
+	err := Mount(sm, "pki/", &MountConfiguration{
+		Type:        "pki",
+		Description: "A pki backend for HTCondor jobs",
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -113,7 +120,7 @@ func (s *StubMountLister) ListMounts() (map[string]*vault.MountOutput, error) {
 
 func TestIsCubbyholeMounted(t *testing.T) {
 	lister := &StubMountLister{}
-	m, err := IsCubbyholeMounted(lister)
+	m, err := IsMounted(lister, "cubbyhole/")
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +131,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnMiss: true,
 	}
-	m, err = IsCubbyholeMounted(lister)
+	m, err = IsMounted(lister, "cubbyhole/")
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,7 +142,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnErr: true,
 	}
-	m, err = IsCubbyholeMounted(lister)
+	m, err = IsMounted(lister, "cubbyhole/")
 	if err == nil {
 		t.Error(err)
 	}
@@ -146,7 +153,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 
 func TestIsPKIMounted(t *testing.T) {
 	lister := &StubMountLister{}
-	m, err := IsPKIMounted(lister)
+	m, err := IsMounted(lister, "pki/")
 	if err != nil {
 		t.Error(err)
 	}
@@ -157,7 +164,7 @@ func TestIsPKIMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnMiss: true,
 	}
-	m, err = IsPKIMounted(lister)
+	m, err = IsMounted(lister, "pki/")
 	if err != nil {
 		t.Error(err)
 	}
@@ -168,7 +175,7 @@ func TestIsPKIMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnErr: true,
 	}
-	m, err = IsPKIMounted(lister)
+	m, err = IsMounted(lister, "pki/")
 	if err == nil {
 		t.Error(err)
 	}
@@ -188,7 +195,7 @@ func (s *StubMountConfigGetter) MountConfig(path string) (*vault.MountConfigOutp
 
 func TestPKIMountConfig(t *testing.T) {
 	sg := &StubMountConfigGetter{}
-	mo, err := PKIMountConfig(sg)
+	mo, err := MountConfig(sg, "pki/")
 	if err != nil {
 		t.Error(err)
 	}
@@ -234,21 +241,27 @@ func (w *StubCubbyholeWriter) Write(client *vault.Client, token string, data map
 	return secret, nil
 }
 
-func TestWriteToCubbyhole(t *testing.T) {
+func TestWriteMount1(t *testing.T) {
 	sw := &StubCubbyholeWriter{}
-	err := WriteToCubbyhole(sw, "token", "content")
+	err := WriteMount(sw, fmt.Sprintf("cubbyhole/%s", "token"), "token", map[string]interface{}{
+		"irods-config": "content",
+	})
 	if err != nil {
 		t.Error(err)
 	}
 
 	sw = &StubCubbyholeWriter{clientError: true}
-	err = WriteToCubbyhole(sw, "token", "content")
+	err = WriteMount(sw, fmt.Sprintf("cubbyhole/%s", "token"), "token", map[string]interface{}{
+		"irods-config": "content",
+	})
 	if err == nil {
 		t.Error("err was nil")
 	}
 
 	sw = &StubCubbyholeWriter{writeError: true}
-	err = WriteToCubbyhole(sw, "token", "content")
+	err = WriteMount(sw, fmt.Sprintf("cubbyhole/%s", "token"), "token", map[string]interface{}{
+		"irods-config": "content",
+	})
 	if err == nil {
 		t.Error("err was nil")
 	}
@@ -316,80 +329,62 @@ func (r *StubCubbyholeReader) Read(client *vault.Client, path string) (*vault.Se
 
 func TestReadFromCubbyhole(t *testing.T) {
 	sr := &StubCubbyholeReader{}
-	s, err := ReadFromCubbyhole(sr, "token")
+	s, err := ReadMount(sr, fmt.Sprintf("cubbyhole/%s", "token"), "token")
 	if err != nil {
 		t.Error(err)
 	}
-	if s == "" {
+	if s == nil {
 		t.Error("secret was nil")
 	}
-	if s != "foo" {
+	v, ok := s["irods-config"]
+	if !ok {
+		t.Errorf("counldn't find the 'irods-config' in the data map")
+	}
+	if v != "foo" {
 		t.Errorf("secret was '%s' instead of 'foo'", s)
 	}
 
 	sr = &StubCubbyholeReader{
 		clientError: true,
 	}
-	s, err = ReadFromCubbyhole(sr, "token")
+	s, err = ReadMount(sr, fmt.Sprintf("cubbyhole/%s", "token"), "token")
 	if err == nil {
 		t.Error(err)
 	}
-	if s != "" {
-		t.Error("secret was not empty after a client creation error")
+	if s != nil {
+		t.Error("secret was not nil after a client creation error")
 	}
 
 	sr = &StubCubbyholeReader{
 		secretError: true,
 	}
-	s, err = ReadFromCubbyhole(sr, "token")
+	s, err = ReadMount(sr, fmt.Sprintf("cubbyhole/%s", "token"), "token")
 	if err == nil {
 		t.Error(err)
 	}
-	if s != "" {
+	if s != nil {
 		t.Error("secret was not empty after a client creation error")
 	}
 
 	sr = &StubCubbyholeReader{
 		readError: true,
 	}
-	s, err = ReadFromCubbyhole(sr, "token")
+	s, err = ReadMount(sr, fmt.Sprintf("cubbyhole/%s", "token"), "token")
 	if err == nil {
 		t.Error(err)
 	}
-	if s != "" {
+	if s != nil {
 		t.Error("secret was not empty after a client creation error")
 	}
 
 	sr = &StubCubbyholeReader{
 		dataError: true,
 	}
-	s, err = ReadFromCubbyhole(sr, "token")
+	s, err = ReadMount(sr, fmt.Sprintf("cubbyhole/%s", "token"), "token")
 	if err == nil {
 		t.Error(err)
 	}
-	if s != "" {
-		t.Error("secret was not empty after a client creation error")
-	}
-
-	sr = &StubCubbyholeReader{
-		noConfigError: true,
-	}
-	s, err = ReadFromCubbyhole(sr, "token")
-	if err == nil {
-		t.Error(err)
-	}
-	if s != "" {
-		t.Error("secret was not empty after a client creation error")
-	}
-
-	sr = &StubCubbyholeReader{
-		badConfigError: true,
-	}
-	s, err = ReadFromCubbyhole(sr, "token")
-	if err == nil {
-		t.Error(err)
-	}
-	if s != "" {
+	if s != nil {
 		t.Error("secret was not empty after a client creation error")
 	}
 }
