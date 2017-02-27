@@ -582,3 +582,27 @@ func TestGeneratePKICert(t *testing.T) {
 		t.Errorf("common_name was '%s' instead of 'foo.com'", mrw.data["common_name"])
 	}
 }
+
+type StubPKIRevoker struct {
+	certID string
+}
+
+func (r *StubPKIRevoker) Client() *vault.Client {
+	return &vault.Client{}
+}
+
+func (r *StubPKIRevoker) Revoke(client *vault.Client, id string) error {
+	r.certID = id
+	return nil
+}
+
+func TestRevokePKICert(t *testing.T) {
+	rv := &StubPKIRevoker{}
+	err := RevokePKICert(rv, "foo")
+	if err != nil {
+		t.Error(err)
+	}
+	if rv.certID != "foo" {
+		t.Errorf("clientID was '%s' instead of 'foo'", rv.certID)
+	}
+}
