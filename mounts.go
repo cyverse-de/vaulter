@@ -40,6 +40,13 @@ type MountReader interface {
 	Read(c *vault.Client, path string) (*vault.Secret, error)
 }
 
+// MountReaderWriter defines an interface for doing role related operations.
+type MountReaderWriter interface {
+	ClientGetter
+	MountWriter
+	MountReader
+}
+
 // MountConfiguration is a flattened representation of the configs that the Vault API
 // supports for the backend mounts.
 type MountConfiguration struct {
