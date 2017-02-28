@@ -47,7 +47,7 @@ func TestCreateRole(t *testing.T) {
 		AllowedDomains:  "foo.com",
 		AllowSubdomains: true,
 	}
-	secret, err := CreateRole(sr, "foo", rc)
+	secret, err := CreateRole(sr, "pki", "foo", rc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +56,7 @@ func TestCreateRole(t *testing.T) {
 	}
 
 	sr = &StubRoller{writeError: true}
-	secret, err = CreateRole(sr, "foo", rc)
+	secret, err = CreateRole(sr, "pki", "foo", rc)
 	if err == nil {
 		t.Error(err)
 	}
@@ -67,7 +67,7 @@ func TestCreateRole(t *testing.T) {
 
 func TestHasRole(t *testing.T) {
 	sr := &StubRoller{}
-	hasRole, err := HasRole(sr, "foo", "foo.com", true)
+	hasRole, err := HasRole(sr, "pki", "foo", "foo.com", true)
 	if err != nil {
 		t.Error(err)
 	}

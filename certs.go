@@ -98,6 +98,25 @@ func CSR(m MountReaderWriter, mountPath string, c *CSRConfig) (*vault.Secret, er
 	return m.Write(client, path, data)
 }
 
+// CSRSigningConfig contains the configuration settings for signing a CSR.
+type CSRSigningConfig struct {
+	CommonName string
+	TTL        string
+}
+
+// SignCSR signs the provided CSR by passing it to the /root/sign-intermediate
+// path in the given backend.
+func SignCSR(m MountReaderWriter, rootPath string, csr string, c *CSRSigningConfig) (*vault.Secret, error) {
+	client := m.Client()
+	path := fmt.Sprintf("%s/root/sign-intermediate", rootPath)
+	data := map[string]interface{}{
+		"common_name": c.CommonName,
+		"ttl":         c.TTL,
+		"csr":         csr,
+	}
+	return m.Write(client, path, data)
+}
+
 // ConfigCAAccess sets the issuing_certificates and crl_distribution_points URLs
 // for the backend mounted at the given path.
 func ConfigCAAccess(m MountReaderWriter, scheme, hostPort, mountPath string) (*vault.Secret, error) {
@@ -107,6 +126,31 @@ func ConfigCAAccess(m MountReaderWriter, scheme, hostPort, mountPath string) (*v
 	data := map[string]interface{}{
 		"issuing_certificates":    fmt.Sprintf("%s://%s/v1/%s/ca", scheme, hostPort, mountPath),
 		"crl_distribution_points": fmt.Sprintf("%s://%s/v1/%s/crl", scheme, hostPort, mountPath),
+	}
+	return m.Write(client, path, data)
+}
+
+// IssueCertConfig contains the settings needed for issuing a cert.
+type IssueCertConfig struct {
+	CommonName        string
+	AltNames          string // csv of requested subject alternative names
+	IPSans            string // csv of ip subject alternative names
+	TTL               string
+	Format            string // See the /pki/issue docs on https://www.vaultproject.io/docs/secrets/pki/ for valid values.
+	ExcludeCNFromSans bool   // exclude common name from subject alternative names
+}
+
+// IssueCert issues a cert with the given backend using the given role name.
+func IssueCert(m MountReaderWriter, mountPath, roleName string, c *IssueCertConfig) (*vault.Secret, error) {
+	client := m.Client()
+	path := fmt.Sprintf("%s/issue/%s", mountPath, roleName)
+	data := map[string]interface{}{
+		"common_name":          c.CommonName,
+		"alt_names":            c.AltNames,
+		"ip_sans":              c.IPSans,
+		"ttl":                  c.TTL,
+		"format":               c.Format,
+		"exclude_cn_from_sans": c.ExcludeCNFromSans,
 	}
 	return m.Write(client, path, data)
 }

@@ -17,20 +17,20 @@ type RoleConfig struct {
 }
 
 // CreateRole creates a new role.
-func CreateRole(r MountReaderWriter, roleName string, c *RoleConfig) (*vault.Secret, error) {
+func CreateRole(r MountReaderWriter, mountPath, roleName string, c *RoleConfig) (*vault.Secret, error) {
 	client := r.Client()
-	writePath := fmt.Sprintf("pki/roles/%s", roleName)
+	writePath := fmt.Sprintf("%s/roles/%s", mountPath, roleName)
 	data := map[string]interface{}{
 		"allowed_domains":  c.AllowedDomains,
 		"allow_subdomains": strconv.FormatBool(c.AllowSubdomains),
 		"key_bits":         c.KeyBits,
-		"allow_any_name":   c.AllowAnyName,
+		"allow_any_name":   strconv.FormatBool(c.AllowAnyName),
 	}
 	return r.Write(client, writePath, data)
 }
 
 // HasRole returns true if the passed in role exists and has the same settings.
-func HasRole(r MountReaderWriter, roleName, domains string, subdomains bool) (bool, error) {
+func HasRole(r MountReaderWriter, mountPath, roleName, domains string, subdomains bool) (bool, error) {
 	client := r.Client()
 	readPath := fmt.Sprintf("pki/roles/%s", roleName)
 	secret, err := r.Read(client, readPath)
