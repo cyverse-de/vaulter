@@ -7,13 +7,24 @@ import (
 	vault "github.com/hashicorp/vault/api"
 )
 
+// RoleConfig contains the settings applied to a new role.
+type RoleConfig struct {
+	AllowedDomains  string
+	AllowSubdomains bool
+	KeyBits         int
+	MaxTTL          string
+	AllowAnyName    bool
+}
+
 // CreateRole creates a new role.
-func CreateRole(r MountReaderWriter, roleName, domains string, subdomains bool) (*vault.Secret, error) {
+func CreateRole(r MountReaderWriter, roleName string, c *RoleConfig) (*vault.Secret, error) {
 	client := r.Client()
 	writePath := fmt.Sprintf("pki/roles/%s", roleName)
 	data := map[string]interface{}{
-		"allowed_domains":  domains,
-		"allow_subdomains": strconv.FormatBool(subdomains),
+		"allowed_domains":  c.AllowedDomains,
+		"allow_subdomains": strconv.FormatBool(c.AllowSubdomains),
+		"key_bits":         c.KeyBits,
+		"allow_any_name":   c.AllowAnyName,
 	}
 	return r.Write(client, writePath, data)
 }

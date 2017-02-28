@@ -501,7 +501,11 @@ func (r *StubRoller) Read(client *vault.Client, path string) (*vault.Secret, err
 
 func TestCreateRole(t *testing.T) {
 	sr := &StubRoller{}
-	secret, err := CreateRole(sr, "foo", "foo.com", true)
+	rc := &RoleConfig{
+		AllowedDomains:  "foo.com",
+		AllowSubdomains: true,
+	}
+	secret, err := CreateRole(sr, "foo", rc)
 	if err != nil {
 		t.Error(err)
 	}
@@ -510,7 +514,7 @@ func TestCreateRole(t *testing.T) {
 	}
 
 	sr = &StubRoller{writeError: true}
-	secret, err = CreateRole(sr, "foo", "foo.com", true)
+	secret, err = CreateRole(sr, "foo", rc)
 	if err == nil {
 		t.Error(err)
 	}
