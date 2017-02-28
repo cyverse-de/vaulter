@@ -65,3 +65,51 @@ func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
 	}
 	return true, nil
 }
+
+// CSRConfig contains configuration settings for generating a certificate
+// signing request.
+type CSRConfig struct {
+	CommonName        string
+	TTL               string
+	KeyBits           int
+	ExcludeCNFromSans bool // disables adding the common name to the list of subject alternative names
+}
+
+// ImportCert sets the signed cert for the backend mounted at the given path
+// inside Vault.
+func ImportCert(m MountReaderWriter, mountPath, certContents string) (*vault.Secret, error) {
+	client := m.Client()
+	path := fmt.Sprintf("%s/intermediate/set-signed", mountPath)
+	data := map[string]interface{}{
+		"certificate": certContents,
+	}
+	return m.Write(client, path, data)
+}
+
+// CSR generates a certificate signing request using the backend mounted at the
+// provided directory.
+func CSR(m MountReaderWriter, mountPath string, c *CSRConfig) (*vault.Secret, error) {
+	var client *vault.Client
+	client = m.Client()
+	path := fmt.Sprintf("%s/intermediate/generate/internal", mountPath)
+	data := map[string]interface{}{
+		"common_name":          c.CommonName,
+		"ttl":                  c.TTL,
+		"key_bits":             c.KeyBits,
+		"exclude_cn_from_sans": c.ExcludeCNFromSans,
+	}
+	return m.Write(client, path, data)
+}
+
+// ConfigCAAccess sets the issuing_certificates and crl_distribution_points URLs
+// for the backend mounted at the given path.
+func ConfigCAAccess(m MountReaderWriter, scheme, hostPort, mountPath string) (*vault.Secret, error) {
+	var client *vault.Client
+	client = m.Client()
+	path := fmt.Sprintf("%s/config/urls", mountPath)
+	data := map[string]interface{}{
+		"issuing_certificates":    fmt.Sprintf("%s://%s/v1/%s/ca", scheme, hostPort, mountPath),
+		"crl_distribution_points": fmt.Sprintf("%s://%s/v1/%s/crl", scheme, hostPort, mountPath),
+	}
+	return m.Write(client, path, data)
+}
