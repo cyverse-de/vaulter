@@ -399,20 +399,8 @@ type StubPKIChecker struct {
 	notFoundError bool
 }
 
-func (w *StubPKIChecker) GetConfig() *vault.Config {
-	return w.cfg
-}
-
-func (w *StubPKIChecker) NewClient(cfg *vault.Config) (*vault.Client, error) {
-	w.cfg = cfg
-	if w.clientError {
-		return nil, errors.New("client error")
-	}
-	return &vault.Client{}, nil
-}
-
-func (w *StubPKIChecker) SetToken(client *vault.Client, token string) {
-	w.token = token
+func (w *StubPKIChecker) Client() *vault.Client {
+	return &vault.Client{}
 }
 
 func (w *StubPKIChecker) Write(client *vault.Client, token string, data map[string]interface{}) (*vault.Secret, error) {
@@ -438,15 +426,6 @@ func TestHasRootCert(t *testing.T) {
 	}
 
 	cw = &StubPKIChecker{writeError: true}
-	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
-	if err == nil {
-		t.Error("err was nil when it should have been set")
-	}
-	if hasCert {
-		t.Error("cert was found when it should be missing")
-	}
-
-	cw = &StubPKIChecker{clientError: true}
 	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
 	if err == nil {
 		t.Error("err was nil when it should have been set")

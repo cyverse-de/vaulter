@@ -15,8 +15,7 @@ type Revoker interface {
 // PKIChecker defines the interface for checking to see if root PKI cert is
 // configured.
 type PKIChecker interface {
-	ClientCreator
-	ConfigGetter
+	ClientGetter
 	MountWriter // this is not a mistake.
 }
 
@@ -50,9 +49,7 @@ func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
 		client *vault.Client
 		err    error
 	)
-	if client, err = m.NewClient(m.GetConfig()); err != nil {
-		return false, err
-	}
+	client = m.Client()
 	writePath := fmt.Sprintf("pki/issue/%s", role)
 	_, err = m.Write(client, writePath, map[string]interface{}{
 		"common_name": commonName,
