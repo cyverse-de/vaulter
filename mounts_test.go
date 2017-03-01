@@ -76,7 +76,7 @@ func (s *StubMountLister) ListMounts() (map[string]*vault.MountOutput, error) {
 
 func TestIsCubbyholeMounted(t *testing.T) {
 	lister := &StubMountLister{}
-	m, err := IsMounted(lister, "cubbyhole/")
+	m, err := IsMounted(lister, "cubbyhole")
 	if err != nil {
 		t.Error(err)
 	}
@@ -87,7 +87,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnMiss: true,
 	}
-	m, err = IsMounted(lister, "cubbyhole/")
+	m, err = IsMounted(lister, "cubbyhole")
 	if err != nil {
 		t.Error(err)
 	}
@@ -98,7 +98,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnErr: true,
 	}
-	m, err = IsMounted(lister, "cubbyhole/")
+	m, err = IsMounted(lister, "cubbyhole")
 	if err == nil {
 		t.Error(err)
 	}
@@ -109,7 +109,7 @@ func TestIsCubbyholeMounted(t *testing.T) {
 
 func TestIsPKIMounted(t *testing.T) {
 	lister := &StubMountLister{}
-	m, err := IsMounted(lister, "pki/")
+	m, err := IsMounted(lister, "pki")
 	if err != nil {
 		t.Error(err)
 	}
@@ -120,7 +120,7 @@ func TestIsPKIMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnMiss: true,
 	}
-	m, err = IsMounted(lister, "pki/")
+	m, err = IsMounted(lister, "pki")
 	if err != nil {
 		t.Error(err)
 	}
@@ -131,7 +131,7 @@ func TestIsPKIMounted(t *testing.T) {
 	lister = &StubMountLister{
 		returnErr: true,
 	}
-	m, err = IsMounted(lister, "pki/")
+	m, err = IsMounted(lister, "pki")
 	if err == nil {
 		t.Error(err)
 	}

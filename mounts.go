@@ -2,6 +2,7 @@ package vaulter
 
 import (
 	"errors"
+	"strings"
 
 	vault "github.com/hashicorp/vault/api"
 )
@@ -95,7 +96,7 @@ func IsMounted(l MountLister, path string) (bool, error) {
 		return false, err
 	}
 	for m := range mounts {
-		if m == path {
+		if strings.TrimSuffix(m, "/") == path {
 			hasPath = true
 		}
 	}

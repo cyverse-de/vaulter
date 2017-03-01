@@ -26,9 +26,9 @@ type PKIRevoker interface {
 }
 
 // GeneratePKICert returns a new PKI cert
-func GeneratePKICert(r MountReaderWriter, roleName, commonName string) (*vault.Secret, error) {
+func GeneratePKICert(r MountReaderWriter, mount, roleName, commonName string) (*vault.Secret, error) {
 	client := r.Client()
-	writePath := fmt.Sprintf("pki/issue/%s", roleName)
+	writePath := fmt.Sprintf("%s/issue/%s", mount, roleName)
 	data := map[string]interface{}{
 		"common_name": commonName,
 	}
@@ -44,18 +44,20 @@ func RevokePKICert(r PKIRevoker, id string) error {
 // HasRootCert returns true if a cert for the provided role and common-name
 // already exists. The current process is a hack. We attempt to generate a cert,
 // if the attempt succeeds then the root cert exists.
-func HasRootCert(m PKIChecker, role, commonName string) (bool, error) {
+func HasRootCert(m PKIChecker, mount, role, commonName string) (bool, error) {
 	var (
 		client *vault.Client
 		err    error
 	)
 	client = m.Client()
-	writePath := fmt.Sprintf("pki/issue/%s", role)
+	writePath := fmt.Sprintf("%s/issue/%s", mount, role)
 	_, err = m.Write(client, writePath, map[string]interface{}{
 		"common_name": commonName,
 	})
 	if err != nil {
+		fmt.Println("boo")
 		if strings.HasSuffix(err.Error(), "backend must be configured with a CA certificate/key") {
+			fmt.Println("urns")
 			return false, nil
 		}
 		return false, err
@@ -89,6 +91,29 @@ func CSR(m MountReaderWriter, mountPath string, c *CSRConfig) (*vault.Secret, er
 	var client *vault.Client
 	client = m.Client()
 	path := fmt.Sprintf("%s/intermediate/generate/internal", mountPath)
+	data := map[string]interface{}{
+		"common_name":          c.CommonName,
+		"ttl":                  c.TTL,
+		"key_bits":             c.KeyBits,
+		"exclude_cn_from_sans": c.ExcludeCNFromSans,
+	}
+	return m.Write(client, path, data)
+}
+
+// RootCACertConfig contains the settings for the root CA cert.
+type RootCACertConfig struct {
+	CommonName        string
+	TTL               string
+	KeyBits           int
+	ExcludeCNFromSans bool
+}
+
+// RootCACert generates the root CA cert and key using the backend mounted at
+// the provided directory.
+func RootCACert(m MountReaderWriter, mountPath string, c *RootCACertConfig) (*vault.Secret, error) {
+	var client *vault.Client
+	client = m.Client()
+	path := fmt.Sprintf("%s/root/generate/internal", mountPath)
 	data := map[string]interface{}{
 		"common_name":          c.CommonName,
 		"ttl":                  c.TTL,

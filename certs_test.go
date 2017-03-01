@@ -35,7 +35,7 @@ func (w *StubPKIChecker) Write(client *vault.Client, token string, data map[stri
 
 func TestHasRootCert(t *testing.T) {
 	cw := &StubPKIChecker{notFoundError: true}
-	hasCert, err := HasRootCert(cw, "example-dot-com", "test.example.com")
+	hasCert, err := HasRootCert(cw, "pki", "example-dot-com", "test.example.com")
 	if err != nil {
 		t.Error(err)
 	}
@@ -44,7 +44,7 @@ func TestHasRootCert(t *testing.T) {
 	}
 
 	cw = &StubPKIChecker{writeError: true}
-	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
+	hasCert, err = HasRootCert(cw, "pki", "example-dot-com", "test.example.com")
 	if err == nil {
 		t.Error("err was nil when it should have been set")
 	}
@@ -53,7 +53,7 @@ func TestHasRootCert(t *testing.T) {
 	}
 
 	cw = &StubPKIChecker{}
-	hasCert, err = HasRootCert(cw, "example-dot-com", "test.example.com")
+	hasCert, err = HasRootCert(cw, "pki", "example-dot-com", "test.example.com")
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,7 +64,7 @@ func TestHasRootCert(t *testing.T) {
 
 func TestGeneratePKICert(t *testing.T) {
 	mrw := &StubMountReaderWriter{}
-	secret, err := GeneratePKICert(mrw, "foo", "foo.com")
+	secret, err := GeneratePKICert(mrw, "pki", "foo", "foo.com")
 	if err != nil {
 		t.Error(err)
 	}
