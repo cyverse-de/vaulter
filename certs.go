@@ -55,9 +55,7 @@ func HasRootCert(m PKIChecker, mount, role, commonName string) (bool, error) {
 		"common_name": commonName,
 	})
 	if err != nil {
-		fmt.Println("boo")
 		if strings.HasSuffix(err.Error(), "backend must be configured with a CA certificate/key") {
-			fmt.Println("urns")
 			return false, nil
 		}
 		return false, err
