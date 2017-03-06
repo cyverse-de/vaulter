@@ -32,7 +32,7 @@ func CreateRole(r MountReaderWriter, mountPath, roleName string, c *RoleConfig) 
 // HasRole returns true if the passed in role exists and has the same settings.
 func HasRole(r MountReaderWriter, mountPath, roleName, domains string, subdomains bool) (bool, error) {
 	client := r.Client()
-	readPath := fmt.Sprintf("pki/roles/%s", roleName)
+	readPath := fmt.Sprintf("%s/roles/%s", mountPath, roleName)
 	secret, err := r.Read(client, readPath)
 	if err != nil {
 		return false, err
