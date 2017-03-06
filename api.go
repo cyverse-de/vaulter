@@ -20,6 +20,7 @@ type Vaulter interface {
 	TokenSetter
 	MountWriter
 	MountReader
+	PathDeleter
 	Revoker
 }
 
@@ -44,6 +45,11 @@ func (v *VaultAPI) CreateToken(ta *vault.TokenAuth, opts *vault.TokenCreateReque
 func (v *VaultAPI) Mount(path string, mi *vault.MountInput) error {
 	sys := v.client.Sys()
 	return sys.Mount(path, mi)
+}
+
+// Unmount uses the Vault API to unmount a backend at the provided path.
+func (v *VaultAPI) Unmount(path string) error {
+	return v.client.Sys().Unmount(path)
 }
 
 // MountConfig uses the VaultAPI to get the config for the passed in mount
@@ -118,6 +124,11 @@ func (v *VaultAPI) Write(client *vault.Client, path string, data map[string]inte
 func (v *VaultAPI) Read(client *vault.Client, path string) (*vault.Secret, error) {
 	logical := client.Logical()
 	return logical.Read(path)
+}
+
+// Delete removes a path from a backend.
+func (v *VaultAPI) Delete(client *vault.Client, path string) (*vault.Secret, error) {
+	return client.Logical().Delete(path)
 }
 
 // Revoke revokes the object represented by the passed-in id.

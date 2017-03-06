@@ -41,11 +41,30 @@ type MountReader interface {
 	Read(c *vault.Client, path string) (*vault.Secret, error)
 }
 
+// PathDeleter is an interface for deleting information from a mount, not for
+// deleting the mount itself.
+type PathDeleter interface {
+	Delete(c *vault.Client, path string) (*vault.Secret, error)
+}
+
+// Unmounter is an interface for objects that can unmount a Vault
+// backend.
+type Unmounter interface {
+	Unmount(path string) error
+}
+
 // MountReaderWriter defines an interface for doing role related operations.
 type MountReaderWriter interface {
 	ClientGetter
 	MountWriter
 	MountReader
+}
+
+// MountDeleter defines and interface for deleting content from a path in a
+// mounted backend.
+type MountDeleter interface {
+	ClientGetter
+	PathDeleter
 }
 
 // MountConfiguration is a flattened representation of the configs that the Vault API
@@ -67,6 +86,11 @@ func Mount(m Mounter, path string, c *MountConfiguration) error {
 			MaxLeaseTTL:     c.MaxLeaseTTL,
 		},
 	})
+}
+
+// Unmount unmounts a vault backend with the provided path.
+func Unmount(u Unmounter, path string) error {
+	return u.Unmount(path)
 }
 
 // MountConfig returns the config for the passed in mount rooted at the given
@@ -143,4 +167,10 @@ func ReadMount(cr ClientReader, path, token string) (map[string]interface{}, err
 		return nil, errors.New("data is nil")
 	}
 	return secret.Data, nil
+}
+
+// Delete deletes data from the path in the mount. Does not delete a mount.
+// You unmount a mount, you don't delete one.
+func Delete(md MountDeleter, path string) (*vault.Secret, error) {
+	return md.Delete(md.Client(), path)
 }
