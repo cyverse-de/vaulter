@@ -344,37 +344,3 @@ func TestReadFromCubbyhole(t *testing.T) {
 		t.Error("secret was not empty after a client creation error")
 	}
 }
-
-type StubMountReaderWriter struct {
-	path       string
-	data       map[string]interface{}
-	writeError bool
-	readError  bool
-}
-
-func (r *StubMountReaderWriter) Client() *vault.Client {
-	return &vault.Client{}
-}
-
-func (r *StubMountReaderWriter) Write(client *vault.Client, token string, data map[string]interface{}) (*vault.Secret, error) {
-	r.data = data
-	secret := &vault.Secret{}
-	if r.writeError {
-		return nil, errors.New("write error")
-	}
-	return secret, nil
-}
-
-func (r *StubMountReaderWriter) Read(client *vault.Client, path string) (*vault.Secret, error) {
-	if r.readError {
-		return nil, errors.New("read error")
-	}
-	r.path = path
-	retval := &vault.Secret{
-		Data: map[string]interface{}{
-			"allowed_domains":  "foo.com",
-			"allow_subdomains": "true",
-		},
-	}
-	return retval, nil
-}
