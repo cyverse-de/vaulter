@@ -19,28 +19,6 @@ type PKIChecker interface {
 	MountWriter // this is not a mistake.
 }
 
-// PKIRevoker defines an interface for revoking a cert.
-type PKIRevoker interface {
-	ClientGetter
-	Revoker
-}
-
-// GeneratePKICert returns a new PKI cert
-func GeneratePKICert(r MountReaderWriter, mount, roleName, commonName string) (*vault.Secret, error) {
-	client := r.Client()
-	writePath := fmt.Sprintf("%s/issue/%s", mount, roleName)
-	data := map[string]interface{}{
-		"common_name": commonName,
-	}
-	return r.Write(client, writePath, data)
-}
-
-// RevokePKICert revokes a PKI cert
-func RevokePKICert(r PKIRevoker, id string) error {
-	client := r.Client()
-	return r.Revoke(client, id)
-}
-
 // HasRootCert returns true if a cert for the provided role and common-name
 // already exists. The current process is a hack. We attempt to generate a cert,
 // if the attempt succeeds then the root cert exists.

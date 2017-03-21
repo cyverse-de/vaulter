@@ -7,17 +7,9 @@ import (
 // Vaulter defines the lower-level interactions with vault so that they can be
 // stubbed out in unit tests.
 type Vaulter interface {
-	Tokener
 	Mounter
 	MountConfigGetter
 	MountLister
-	Configurer
-	ConfigGetter
-	ConfigSetter
-	ClientCreator
-	ClientSetter
-	ClientGetter
-	TokenSetter
 	MountWriter
 	MountReader
 	PathDeleter
