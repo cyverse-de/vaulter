@@ -1,6 +1,7 @@
 package vaulter
 
 import (
+	"errors"
 	"strings"
 
 	vault "github.com/hashicorp/vault/api"
@@ -114,4 +115,56 @@ func IsMounted(l MountLister, path string) (bool, error) {
 		}
 	}
 	return hasPath, nil
+}
+
+// WriteMount writes data to a path in a backend using a newly created
+// client whose token is set to the one provided.
+func WriteMount(cw ClientWriter, path, token string, data map[string]interface{}) error {
+	var (
+		client *vault.Client
+		err    error
+	)
+	defcfg := cw.DefaultConfig()
+	newcfg := cw.GetConfig()
+	defcfg.Address = newcfg.Address
+	defcfg.MaxRetries = newcfg.MaxRetries
+	if client, err = cw.NewClient(defcfg); err != nil {
+		return err
+	}
+	cw.SetToken(client, token)
+	_, err = cw.Write(client, path, data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ReadMount reads data from a path in a mount using a newly created client
+// whose token is set to the one provided.
+func ReadMount(cr ClientReader, path, token string) (map[string]interface{}, error) {
+	var (
+		client *vault.Client
+		err    error
+	)
+	if client, err = cr.NewClient(cr.GetConfig()); err != nil {
+		return nil, err
+	}
+	cr.SetToken(client, token)
+	secret, err := cr.Read(client, path)
+	if err != nil {
+		return nil, err
+	}
+	if secret == nil {
+		return nil, errors.New("secret is nil")
+	}
+	if secret.Data == nil {
+		return nil, errors.New("data is nil")
+	}
+	return secret.Data, nil
+}
+
+// Delete deletes data from the path in the mount. Does not delete a mount.
+// You unmount a mount, you don't delete one.
+func Delete(md MountDeleter, path string) (*vault.Secret, error) {
+	return md.Delete(md.Client(), path)
 }
